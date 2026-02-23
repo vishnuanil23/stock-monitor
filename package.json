@@ -1,17 +1,17 @@
 {
-  "name": "stock-monitor",
-  "version": "0.1.0",
-  "description": "Stock monitoring system with scrapers and notifications",
+  "name": "hmt-stock-alert",
+  "version": "1.0.0",
+  "description": "HMT watch stock alert system",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "axios": "^1.6.8",
-    "cheerio": "^1.0.0-rc.12",
-    "dotenv": "^16.4.5",
-    "node-cron": "^3.0.3",
-    "puppeteer": "^22.6.5"
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.2",
+    "puppeteer": "^21.5.1"
   }
 }

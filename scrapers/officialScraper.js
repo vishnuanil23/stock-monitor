@@ -1,64 +1,41 @@
 import axios from "axios";
-import cheerio from "cheerio";
+import * as cheerio from "cheerio";
 
-export default async function officialScraper(watchName) {
-  if (!watchName || !String(watchName).trim()) {
-    return { found: false, inStock: false, link: null };
-  }
-
-  const query = encodeURIComponent(String(watchName).trim());
-  const url = `https://www.hmtwatches.in/?s=${query}`;
-
+export async function checkOfficial(watchName) {
   try {
-    const res = await axios.get(url, {
-      timeout: 30000,
+    const searchUrl = `https://www.hmtwatches.in/?s=${encodeURIComponent(watchName)}`;
+    const { data } = await axios.get(searchUrl, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml",
-      },
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+      }
     });
 
-    const $ = cheerio.load(res.data);
-    const needle = String(watchName).toLowerCase();
+    const $ = cheerio.load(data);
 
-    const cards = $("li.product, .product").toArray();
+    let found = false;
+    let inStock = false;
+    let link = null;
 
-    for (const el of cards) {
-      const $el = $(el);
-      const title = $el
-        .find(
-          ".woocommerce-loop-product__title, h2.woocommerce-loop-product__title, .product-title, h2, h3"
-        )
-        .first()
-        .text()
-        .trim();
+    $(".product").each((_, el) => {
+      const title = $(el).find("h2").text().trim().toLowerCase();
+      console.log("Product title:", title);
 
-      if (!title) continue;
-      if (!title.toLowerCase().includes(needle)) continue;
+      if (title.includes(watchName.toLowerCase())) {
+        found = true;
+        link = $(el).find("a").attr("href");
 
-      const link =
-        $el
-          .find("a.woocommerce-LoopProduct-link, a[href]")
-          .first()
-          .attr("href") || null;
+        const text = $(el).text().toLowerCase();
+        if (!text.includes("out of stock")) {
+          inStock = true;
+        }
+      }
+    });
 
-      const stockText = $el
-        .find(".stock, .stock-status, .out-of-stock, .in-stock")
-        .first()
-        .text()
-        .trim();
+    return { found, inStock, link };
 
-      const classText = $el.attr("class") || "";
-      const outByText = stockText.toLowerCase().includes("out of stock");
-      const outByClass = /outofstock|out-of-stock/i.test(classText);
-      const inStock = !(outByText || outByClass);
-
-      return { found: true, inStock, link };
-    }
-
-    return { found: false, inStock: false, link: null };
-  } catch {
+  } catch (err) {
+    console.error("Official scraper error:", err.message);
     return { found: false, inStock: false, link: null };
   }
 }
