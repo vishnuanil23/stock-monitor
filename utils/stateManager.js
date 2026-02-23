@@ -1,5 +1,9 @@
-const fs = require("fs");
-const path = require("path");
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const stateDir = path.join(__dirname, "..", "state");
 const statePath = path.join(stateDir, "state.json");
@@ -34,11 +38,11 @@ async function writeState(state) {
   await fs.promises.rename(tmpPath, statePath);
 }
 
-async function getState() {
+export async function getState() {
   return readState();
 }
 
-async function updateState(watchName, site, status) {
+export async function updateState(watchName, site, status) {
   if (!watchName || !site) return readState();
   const state = await readState();
   if (!state[watchName]) state[watchName] = {};
@@ -46,8 +50,3 @@ async function updateState(watchName, site, status) {
   await writeState(state);
   return state;
 }
-
-module.exports = {
-  getState,
-  updateState,
-};

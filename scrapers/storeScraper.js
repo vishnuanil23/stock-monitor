@@ -1,6 +1,6 @@
-const puppeteer = require("puppeteer");
+import puppeteer from "puppeteer";
 
-async function storeScraper(watchName) {
+export default async function storeScraper(watchName) {
   if (!watchName || !String(watchName).trim()) {
     return { found: false, inStock: false, link: null };
   }
@@ -84,5 +84,3 @@ async function storeScraper(watchName) {
     }
   }
 }
-
-module.exports = storeScraper;

@@ -1,7 +1,7 @@
-const axios = require("axios");
-const cheerio = require("cheerio");
+import axios from "axios";
+import cheerio from "cheerio";
 
-async function officialScraper(watchName) {
+export default async function officialScraper(watchName) {
   if (!watchName || !String(watchName).trim()) {
     return { found: false, inStock: false, link: null };
   }
@@ -62,5 +62,3 @@ async function officialScraper(watchName) {
     return { found: false, inStock: false, link: null };
   }
 }
-
-module.exports = officialScraper;

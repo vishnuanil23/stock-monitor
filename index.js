@@ -1,60 +1,65 @@
 import dotenv from "dotenv";
 import cron from "node-cron";
-import { fetchStoreStock } from "./scrapers/storeScraper.js";
-import { fetchOfficialStock } from "./scrapers/officialScraper.js";
-import { loadState, saveState } from "./utils/stateManager.js";
-import { sendTelegramMessage } from "./notifier/telegram.js";
+import storeScraper from "./scrapers/storeScraper.js";
+import officialScraper from "./scrapers/officialScraper.js";
+import { getState, updateState } from "./utils/stateManager.js";
+import { sendNotification } from "./notifier/telegram.js";
 
 dotenv.config();
 
-const REQUIRED_ENV = ["BOT_TOKEN", "CHAT_ID", "WATCH_NAME", "CHECK_INTERVAL_MINUTES"];
-const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
-
-if (missing.length > 0) {
-  console.error(`Missing required env vars: ${missing.join(", ")}`);
-  process.exit(1);
-}
-
-const intervalMinutes = Number(process.env.CHECK_INTERVAL_MINUTES);
-if (!Number.isFinite(intervalMinutes) || intervalMinutes <= 0) {
-  console.error("CHECK_INTERVAL_MINUTES must be a positive number");
-  process.exit(1);
-}
-
-const CHECK_SCHEDULE = `*/${intervalMinutes} * * * *`;
 const WATCH_NAME = process.env.WATCH_NAME;
+if (!WATCH_NAME) {
+  console.error("Missing WATCH_NAME env var");
+  process.exit(1);
+}
+
+const intervalMinutes = Number(process.env.CHECK_INTERVAL_MINUTES || 5);
+const schedule =
+  Number.isFinite(intervalMinutes) && intervalMinutes > 0
+    ? `*/${intervalMinutes} * * * *`
+    : "*/5 * * * *";
+
+function toStatus(inStock) {
+  return inStock ? "IN" : "OUT";
+}
 
 async function runCheck() {
-  const state = loadState();
+  const state = await getState();
+  const watchKey = WATCH_NAME;
 
-  const [storeData, officialData] = await Promise.all([
-    fetchStoreStock(),
-    fetchOfficialStock()
-  ]);
+  const storeResult = await storeScraper(watchKey);
+  const storeStatus = toStatus(storeResult.inStock);
+  console.log(`[STORE] Status: ${storeStatus}`);
 
-  const nextState = {
-    ...state,
-    lastRunAt: new Date().toISOString(),
-    store: storeData,
-    official: officialData
-  };
+  const officialResult = await officialScraper(watchKey);
+  const officialStatus = toStatus(officialResult.inStock);
+  console.log(`[OFFICIAL] Status: ${officialStatus}`);
 
-  saveState(nextState);
+  const prevStore = state?.[watchKey]?.store ?? "OUT";
+  const prevOfficial = state?.[watchKey]?.official ?? "OUT";
 
-  if (storeData?.inStock || officialData?.inStock) {
-    await sendTelegramMessage(
-      `[${WATCH_NAME}] Stock update:\nStore: ${storeData?.status || "unknown"}\nOfficial: ${officialData?.status || "unknown"}`
+  if (prevStore === "OUT" && storeStatus === "IN") {
+    await sendNotification(
+      `[${watchKey}] Store stock is IN: ${storeResult.link || "link unavailable"}`
     );
   }
+
+  if (prevOfficial === "OUT" && officialStatus === "IN") {
+    await sendNotification(
+      `[${watchKey}] Official stock is IN: ${officialResult.link || "link unavailable"}`
+    );
+  }
+
+  await updateState(watchKey, "store", storeStatus);
+  await updateState(watchKey, "official", officialStatus);
 }
 
-cron.schedule(CHECK_SCHEDULE, () => {
+cron.schedule(schedule, () => {
   runCheck().catch((err) => {
     console.error("Stock check failed:", err);
   });
 });
 
-// Run once on startup
 runCheck().catch((err) => {
   console.error("Initial stock check failed:", err);
 });
