@@ -1,6 +1,6 @@
 import puppeteer from "puppeteer";
 
-export default async function storeScraper(watchName) {
+export async function checkStore(watchName) {
   if (!watchName || !String(watchName).trim()) {
     return { found: false, inStock: false, link: null };
   }
@@ -12,64 +12,48 @@ export default async function storeScraper(watchName) {
   try {
     browser = await puppeteer.launch({
       headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--no-zygote",
+        "--single-process",
+      ],
+      defaultViewport: { width: 1280, height: 800 },
     });
 
     const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(30000);
+    page.setDefaultTimeout(30000);
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
 
-    const result = await page.evaluate((needle) => {
-      const norm = (s) => (s || "").toLowerCase();
-      const want = norm(needle);
+    const products = await page.$$eval(".product", (elements) =>
+      elements.map((el) => ({
+        title: el.querySelector("h2")?.innerText || "",
+        text: el.innerText,
+        link: el.querySelector("a")?.href || null,
+      }))
+    );
 
-      const productNodes = Array.from(
-        document.querySelectorAll("li.product, .product")
-      );
+    let found = false;
+    let inStock = false;
+    let link = null;
 
-      const getTitle = (el) => {
-        const titleEl =
-          el.querySelector(
-            ".woocommerce-loop-product__title, h2.woocommerce-loop-product__title, .product-title, h2, h3"
-          ) || el;
-        return (titleEl.textContent || "").trim();
-      };
+    for (const product of products) {
+      console.log("Product title:", product.title);
+      if (product.title.toLowerCase().includes(watchName.toLowerCase())) {
+        found = true;
+        link = product.link;
 
-      const getLink = (el) => {
-        const linkEl =
-          el.querySelector("a.woocommerce-LoopProduct-link") ||
-          el.querySelector("a[href]");
-        return linkEl ? linkEl.href : null;
-      };
-
-      const getStockText = (el) => {
-        const stockEl =
-          el.querySelector(".stock") ||
-          el.querySelector(".stock-status") ||
-          el.querySelector(".out-of-stock") ||
-          el.querySelector(".in-stock");
-        return stockEl ? (stockEl.textContent || "").trim() : "";
-      };
-
-      for (const el of productNodes) {
-        const title = getTitle(el);
-        if (!title) continue;
-        if (!norm(title).includes(want)) continue;
-
-        const stockText = getStockText(el);
-        const classText = el.className || "";
-        const outByText = norm(stockText).includes("out of stock");
-        const outByClass = /outofstock|out-of-stock/i.test(classText);
-        const inStock = !(outByText || outByClass);
-
-        return {
-          found: true,
-          inStock,
-          link: getLink(el),
-        };
+        if (!product.text.toLowerCase().includes("out of stock")) {
+          inStock = true;
+        }
+        break;
       }
+    }
 
-      return { found: false, inStock: false, link: null };
-    }, watchName);
+    const result = { found, inStock, link };
 
     return result;
   } catch {
