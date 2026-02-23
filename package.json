@@ -1,0 +1,17 @@
+{
+  "name": "stock-monitor",
+  "version": "0.1.0",
+  "description": "Stock monitoring system with scrapers and notifications",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "puppeteer": "^22.6.5"
+  }
+}
