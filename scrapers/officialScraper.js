@@ -1,27 +1,66 @@
-import puppeteer from "puppeteer";
+const axios = require("axios");
+const cheerio = require("cheerio");
 
-export async function fetchOfficialStock() {
-  const url = process.env.OFFICIAL_PRODUCT_URL;
-  if (!url) {
-    return { inStock: false, status: "missing OFFICIAL_PRODUCT_URL" };
+async function officialScraper(watchName) {
+  if (!watchName || !String(watchName).trim()) {
+    return { found: false, inStock: false, link: null };
   }
 
-  const browser = await puppeteer.launch({
-    headless: "new"
-  });
+  const query = encodeURIComponent(String(watchName).trim());
+  const url = `https://www.hmtwatches.in/?s=${query}`;
 
   try {
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "networkidle2" });
+    const res = await axios.get(url, {
+      timeout: 30000,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
 
-    const statusText = await page
-      .$eval("[data-stock-status]", (el) => el.textContent?.trim() || "unknown")
-      .catch(() => "unknown");
+    const $ = cheerio.load(res.data);
+    const needle = String(watchName).toLowerCase();
 
-    const inStock = /in stock|available/i.test(statusText);
+    const cards = $("li.product, .product").toArray();
 
-    return { inStock, status: statusText };
-  } finally {
-    await browser.close();
+    for (const el of cards) {
+      const $el = $(el);
+      const title = $el
+        .find(
+          ".woocommerce-loop-product__title, h2.woocommerce-loop-product__title, .product-title, h2, h3"
+        )
+        .first()
+        .text()
+        .trim();
+
+      if (!title) continue;
+      if (!title.toLowerCase().includes(needle)) continue;
+
+      const link =
+        $el
+          .find("a.woocommerce-LoopProduct-link, a[href]")
+          .first()
+          .attr("href") || null;
+
+      const stockText = $el
+        .find(".stock, .stock-status, .out-of-stock, .in-stock")
+        .first()
+        .text()
+        .trim();
+
+      const classText = $el.attr("class") || "";
+      const outByText = stockText.toLowerCase().includes("out of stock");
+      const outByClass = /outofstock|out-of-stock/i.test(classText);
+      const inStock = !(outByText || outByClass);
+
+      return { found: true, inStock, link };
+    }
+
+    return { found: false, inStock: false, link: null };
+  } catch {
+    return { found: false, inStock: false, link: null };
   }
 }
+
+module.exports = officialScraper;
